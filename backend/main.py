@@ -1,14 +1,16 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import ollama
 import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import ollama
+
 from backend.memory.rag import get_context_for_query
-from backend.memory.writer import save_owner_note, save_anomaly
+from backend.memory.reader import get_vault_files
+from backend.memory.writer import save_owner_note
 
 app = FastAPI()
 
@@ -42,19 +44,25 @@ Your rules — follow these exactly:
 def root():
     return {"status": "Cortex is running"}
 
+@app.get("/status")
+def status():
+    """Returns basic vault status."""
+    files = get_vault_files()
+    return {
+        "status": "running",
+        "vault_files": len(files),
+        "model": "llama3.2"
+    }
+
 @app.post("/ask")
 def ask(query: Query):
     """Takes a question, pulls relevant vault context, asks Ollama."""
-    
-    # Get relevant vault files for this question
+
     context = get_context_for_query(query.question)
-    
-    # If the owner is telling us something rather than asking,
-    # save it to the vault
+
     if query.save_note:
         save_owner_note(query.question)
-    
-    # Build the full prompt
+
     full_prompt = f"""
 Here is everything I know about this business:
 
@@ -64,8 +72,7 @@ Here is everything I know about this business:
 
 Owner's question: {query.question}
 """
-    
-    # Send to Ollama
+
     response = ollama.chat(
         model="llama3.2",
         messages=[
@@ -73,18 +80,29 @@ Owner's question: {query.question}
             {"role": "user",   "content": full_prompt}
         ]
     )
-    
+
     answer = response["message"]["content"]
-    
     return {"answer": answer}
 
-@app.get("/status")
-def status():
-    """Returns basic vault status."""
-    from backend.memory.reader import get_vault_files
-    files = get_vault_files()
-    return {
-        "status": "running",
-        "vault_files": len(files),
-        "model": "llama3.2"
-    }
+@app.get("/quickbooks/connect")
+def quickbooks_connect():
+    """Returns the URL to start QuickBooks OAuth flow."""
+    from backend.connectors.quickbooks import get_auth_url
+    url = get_auth_url()
+    return {"auth_url": url}
+
+@app.get("/quickbooks/callback")
+def quickbooks_callback(code: str, realmId: str):
+    """Handles the OAuth callback from QuickBooks."""
+    from backend.connectors.quickbooks import exchange_code_for_tokens
+    tokens = exchange_code_for_tokens(code, realmId)
+    return {"status": "connected", "realm_id": realmId}
+
+@app.get("/quickbooks/status")
+def quickbooks_status():
+    """Checks if QuickBooks is connected."""
+    from backend.connectors.quickbooks import load_tokens
+    tokens = load_tokens()
+    if tokens:
+        return {"connected": True, "realm_id": tokens.get("realm_id")}
+    return {"connected": False}
