@@ -55,7 +55,7 @@ def check_for_anomalies(data):
     if not data:
         return
 
-    latest = data[-1]
+    latest   = data[-1]
     previous = data[-2] if len(data) > 1 else None
 
     # Check labour cost percentage
@@ -91,6 +91,21 @@ def run_nightly_digest(financial_data=None):
     """
     print(f"\nCortex nightly digest starting — "
           f"{datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
+    # Run CSV importer
+    from backend.connectors.excel import run_csv_import
+    run_csv_import()
+
+    # Run QuickBooks pull if connected
+    from backend.connectors.quickbooks import load_tokens, run_quickbooks_pull
+    tokens = load_tokens()
+    if tokens:
+        print("QuickBooks connected — pulling latest data...")
+        qb_data = run_quickbooks_pull()
+        if qb_data:
+            financial_data = [qb_data] if not financial_data else financial_data + [qb_data]
+    else:
+        print("QuickBooks not connected — skipping.")
 
     if financial_data:
         print("Updating monthly summary...")
