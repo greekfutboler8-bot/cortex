@@ -24,11 +24,22 @@ function App() {
     setQuestion("")
     setMessages(prev => [...prev, { role: "user", text: q }])
     setLoading(true)
+
+    // Detect if owner is telling us something vs asking a question
+    const isNote = !q.includes("?") && (
+      q.toLowerCase().startsWith("we ") ||
+      q.toLowerCase().startsWith("i ") ||
+      q.toLowerCase().startsWith("our ") ||
+      q.toLowerCase().startsWith("just ") ||
+      q.toLowerCase().startsWith("fyi") ||
+      q.toLowerCase().startsWith("note")
+    )
+
     try {
       const res = await fetch(`${API}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q })
+        body: JSON.stringify({ question: q, save_note: isNote })
       })
       const data = await res.json()
       setMessages(prev => [...prev, { role: "cortex", text: data.answer }])
