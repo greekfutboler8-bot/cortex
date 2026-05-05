@@ -243,6 +243,91 @@ def dashboard():
         "alerts": alerts,
     }
 
+# ── Briefing cache ────────────────────────────────────────────────────────────
+_briefing_cache = {"text": None, "date": None}
+
+def generate_briefing():
+    """Generate a morning briefing using the LLM from real vault data."""
+    from datetime import date
+    today = str(date.today())
+
+    # Return cached briefing if already generated today
+    if _briefing_cache["date"] == today and _briefing_cache["text"]:
+        return _briefing_cache["text"]
+
+    # Build context from vault
+    profile = parse_business_profile()
+    months = parse_monthly_summary()
+    anomalies = parse_anomalies()
+
+    latest = months[-1] if months else {}
+    previous = months[-2] if len(months) >= 2 else {}
+
+    labour_pct = round((latest.get("labour", 0) / latest.get("revenue", 1)) * 100, 1)
+    cogs_pct = round((latest.get("cogs", 0) / latest.get("revenue", 1)) * 100, 1)
+    net_margin = round((latest.get("net", 0) / latest.get("revenue", 1)) * 100, 1)
+    rev_change = round(((latest.get("revenue", 0) - previous.get("revenue", 1)) / previous.get("revenue", 1)) * 100, 1)
+
+    open_anomalies = [a for a in anomalies if "resolved" not in a.get("status", "").lower()]
+
+    context = f"""
+Business: {profile.get("name")}
+Owner: {profile.get("owner")}
+Latest month: {latest.get("month")}
+Revenue: ${latest.get("revenue", 0):,} ({rev_change:+}% vs prior month)
+Net profit: ${latest.get("net", 0):,} ({net_margin}% margin)
+Labour cost: {labour_pct}% of revenue (target: {profile.get("labour_cost_target")}%)
+Food cost: {cogs_pct}% of revenue (target: {profile.get("food_cost_target")}%)
+
+Active anomalies ({len(open_anomalies)} unresolved):
+{chr(10).join(["- " + a["text"].strip()[:120] for a in open_anomalies[:3]])}
+"""
+
+    prompt = f"""You are Cortex, a private business advisor. Write a morning briefing for the business owner.
+
+{context}
+
+Rules:
+- Write 2-3 sentences maximum. Be direct and specific.
+- Lead with the most important thing they need to know today.
+- If there is a clear problem, name it and give one concrete action.
+- Do not use bullet points. Do not start with "Good morning". Write plain prose.
+- Use the actual numbers from the data above.
+"""
+
+    try:
+        response = ollama.chat(
+            model="llama3.2",
+            messages=[
+                {"role": "system", "content": "You are a direct, no-nonsense business advisor. Be concise and specific."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        text = response["message"]["content"].strip()
+    except Exception as e:
+        text = f"Revenue for {latest.get('month')} was ${latest.get('revenue', 0):,} with a {net_margin}% net margin. Labour is at {labour_pct}% — {'above' if labour_pct > profile.get('labour_cost_target', 30) else 'within'} your {profile.get('labour_cost_target')}% target."
+
+    _briefing_cache["text"] = text
+    _briefing_cache["date"] = today
+    return text
+
+
+@app.get("/briefing")
+def get_briefing():
+    """Returns today's AI-generated morning briefing."""
+    text = generate_briefing()
+    return {"briefing": text, "date": _briefing_cache["date"]}
+
+
+@app.post("/briefing/refresh")
+def refresh_briefing():
+    """Force regenerate the briefing (clears cache)."""
+    _briefing_cache["text"] = None
+    _briefing_cache["date"] = None
+    text = generate_briefing()
+    return {"briefing": text}
+
+
 @app.get("/alerts")
 def get_alerts():
     """Returns all anomalies from the anomaly log."""

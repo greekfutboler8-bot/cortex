@@ -94,6 +94,18 @@ function Dashboard() {
   const chart = data?.chart || [];
 
   const maxRevenue = chart.length ? Math.max(...chart.map((c: any) => c.revenue)) : 1;
+  const { data: briefingData, loading: briefingLoading, refetch: refreshBriefing } = useAPI<any>("/briefing", null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshBriefing = async () => {
+    setRefreshing(true);
+    try {
+      await fetch(`${API}/briefing/refresh`, { method: "POST" });
+      await refreshBriefing();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -105,21 +117,23 @@ function Dashboard() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">Morning Briefing</span>
-            <span className="text-xs text-slate-500">{new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+            <span className="text-xs text-slate-500">{briefingData?.date || new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
           </div>
-          {loading ? (
-            <div className="flex items-center gap-2"><Spinner /><span className="text-sm text-slate-400">Cortex is reading your vault...</span></div>
+          {briefingLoading ? (
+            <div className="flex items-center gap-2"><Spinner /><span className="text-sm text-slate-400">Cortex is generating your briefing...</span></div>
           ) : error ? (
             <p className="text-sm text-red-400">Could not connect to Cortex backend. Is it running?</p>
           ) : (
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Latest month: <span className="text-white font-semibold">{data?.business?.name}</span> — Revenue {fmt(metrics.revenue)}, Net margin {metrics.net_margin_pct}%.
-              {metrics.labour_pct > (data?.business?.labour_cost_target || 30)
-                ? ` ⚠️ Labour at ${metrics.labour_pct}% — above your ${data?.business?.labour_cost_target}% target.`
-                : ` Labour cost on target at ${metrics.labour_pct}%.`}
-            </p>
+            <p className="text-sm text-slate-300 leading-relaxed">{briefingData?.briefing}</p>
           )}
         </div>
+        <button
+          onClick={handleRefreshBriefing}
+          title="Regenerate briefing"
+          className="text-slate-500 hover:text-sky-400 flex-shrink-0 transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
       {/* Metric cards */}
