@@ -11,7 +11,7 @@ import {
 
 type Tab = "dashboard" | "analytics" | "chat" | "reports" | "alerts" | "settings";
 
-const API = "http://127.0.0.1:8000";
+const API = "";
 
 // ── API hooks ─────────────────────────────────────────────────────────────────
 function useAPI<T>(endpoint: string, fallback: T) {
@@ -87,20 +87,20 @@ function AlertBadge({ level }: { level: string }) {
 
 // ── Dashboard Tab ─────────────────────────────────────────────────────────────
 function Dashboard() {
-  const { data, loading, error } = useAPI<any>("/dashboard", null);
+  const { data, loading, error } = useAPI<any>("/api/dashboard", null);
 
   const metrics = data?.metrics || {};
   const alerts = data?.alerts || [];
   const chart = data?.chart || [];
 
   const maxRevenue = chart.length ? Math.max(...chart.map((c: any) => c.revenue)) : 1;
-  const { data: briefingData, loading: briefingLoading, refetch: refreshBriefing } = useAPI<any>("/briefing", null);
+  const { data: briefingData, loading: briefingLoading, refetch: refreshBriefing } = useAPI<any>("/api/briefing", null);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefreshBriefing = async () => {
     setRefreshing(true);
     try {
-      await fetch(`${API}/briefing/refresh`, { method: "POST" });
+      await fetch(`${API}/api/briefing/refresh`, { method: "POST" });
       await refreshBriefing();
     } finally {
       setRefreshing(false);
@@ -267,7 +267,7 @@ function Dashboard() {
 
 // ── Analytics Tab ─────────────────────────────────────────────────────────────
 function Analytics() {
-  const { data, loading } = useAPI<any>("/dashboard", null);
+  const { data, loading } = useAPI<any>("/api/dashboard", null);
   const chart = data?.chart || [];
   const metrics = data?.metrics || {};
   const profile = data?.business || {};
@@ -345,7 +345,7 @@ function Chat() {
     setInput("");
     setLoading(true);
     try {
-      const res = await fetch(`${API}/ask`, {
+      const res = await fetch(`${API}/api/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, save_note: false }),
@@ -411,7 +411,7 @@ function Chat() {
 
 // ── Reports Tab ───────────────────────────────────────────────────────────────
 function Reports() {
-  const { data, loading } = useAPI<any>("/report", null);
+  const { data, loading } = useAPI<any>("/api/report", null);
   const monthly = data?.monthly_history || [];
   const metrics = data?.metrics || {};
 
@@ -472,7 +472,7 @@ function Reports() {
 
 // ── Alerts Tab ────────────────────────────────────────────────────────────────
 function Alerts() {
-  const { data, loading, refetch } = useAPI<any>("/alerts", { alerts: [] });
+  const { data, loading, refetch } = useAPI<any>("/api/alerts", { alerts: [] });
   const [dismissed, setDismissed] = useState<number[]>([]);
   const allAlerts = data?.alerts || [];
   const visible = allAlerts.filter((_: any, i: number) => !dismissed.includes(i));
@@ -523,7 +523,7 @@ function Alerts() {
 
 // ── Settings Tab ──────────────────────────────────────────────────────────────
 function SettingsTab() {
-  const { data, loading } = useAPI<any>("/business", null);
+  const { data, loading } = useAPI<any>("/api/business", null);
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -580,7 +580,7 @@ const tabs: { id: Tab; label: string; icon: any; badge?: number }[] = [
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [time, setTime] = useState(new Date());
-  const { data: business } = useAPI<any>("/business", { name: "Loading..." });
+  const { data: business } = useAPI<any>("/api/business", { name: "Loading..." });
 
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 60000); return () => clearInterval(t); }, []);
 

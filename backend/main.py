@@ -6,6 +6,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import ollama
 
@@ -24,6 +26,7 @@ app.add_middleware(
 )
 
 VAULT_PATH = os.path.expanduser("~/CortexVault")
+FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
 
 class Query(BaseModel):
     question: str
@@ -46,7 +49,6 @@ Your rules — follow these exactly:
 # ── Vault parsers ─────────────────────────────────────────────────────────────
 
 def read_vault_file(relative_path):
-    """Read a file from the vault, return empty string if not found."""
     full_path = os.path.join(VAULT_PATH, relative_path)
     if not os.path.exists(full_path):
         return ""
@@ -54,7 +56,6 @@ def read_vault_file(relative_path):
         return f.read()
 
 def parse_business_profile():
-    """Parse business-profile.md and return key fields."""
     content = read_vault_file("core/business-profile.md")
     result = {
         "name": "My Business",
@@ -101,7 +102,6 @@ def parse_business_profile():
     return result
 
 def parse_monthly_summary():
-    """Parse monthly-summary.md table and return list of monthly records."""
     content = read_vault_file("financials/monthly-summary.md")
     months = []
     for line in content.splitlines():
@@ -125,7 +125,6 @@ def parse_monthly_summary():
     return months
 
 def parse_anomalies():
-    """Parse anomaly-log.md and return list of alerts."""
     content = read_vault_file("memory/anomaly-log.md")
     alerts = []
     current = None
@@ -142,36 +141,24 @@ def parse_anomalies():
                 current["text"] += line.strip() + " "
     if current:
         alerts.append(current)
-    # Reverse so newest first, skip empty ones
     alerts = [a for a in alerts if a["text"].strip()]
     alerts.reverse()
     return alerts
 
-def parse_weekly_trends():
-    """Parse weekly-trends.md for day of week data."""
-    content = read_vault_file("revenue/weekly-trends.md")
-    return content
-
 def compute_dashboard_metrics(months):
-    """Compute key metrics from monthly data."""
     if not months:
         return {}
-
     latest = months[-1]
     previous = months[-2] if len(months) >= 2 else latest
-
     revenue = latest["revenue"]
     prev_revenue = previous["revenue"]
     labour = latest["labour"]
     cogs = latest["cogs"]
     net = latest["net"]
-    total_costs = labour + cogs + latest["rent"] + latest["other"]
-
     labour_pct = round((labour / revenue * 100), 1) if revenue else 0
     cogs_pct = round((cogs / revenue * 100), 1) if revenue else 0
     net_margin = round((net / revenue * 100), 1) if revenue else 0
     revenue_change = round(((revenue - prev_revenue) / prev_revenue * 100), 1) if prev_revenue else 0
-
     return {
         "latest_month": latest["month"],
         "revenue": revenue,
@@ -184,92 +171,24 @@ def compute_dashboard_metrics(months):
         "cogs_pct": cogs_pct,
     }
 
-# ── API Endpoints ─────────────────────────────────────────────────────────────
-
-@app.get("/")
-def root():
-    return {"status": "Cortex is running"}
-
-@app.get("/status")
-def status():
-    files = get_vault_files()
-    return {
-        "status": "running",
-        "vault_files": len(files),
-        "model": "llama3.2"
-    }
-
-@app.get("/business")
-def business():
-    """Returns business profile info from vault."""
-    return parse_business_profile()
-
-@app.get("/dashboard")
-def dashboard():
-    """Returns all dashboard metrics from real vault data."""
-    profile = parse_business_profile()
-    months = parse_monthly_summary()
-    metrics = compute_dashboard_metrics(months)
-    anomalies = parse_anomalies()
-
-    # Revenue trend for chart (last 12 months)
-    chart_data = [
-        {"month": m["month"], "revenue": m["revenue"], "net": m["net"]}
-        for m in months[-12:]
-    ]
-
-    # Latest anomalies for alerts panel (top 5)
-    alerts = []
-    for a in anomalies[:5]:
-        text = a["text"].strip()
-        status = a["status"]
-        level = "critical"
-        if "watch" in status.lower() or "monitor" in status.lower():
-            level = "warning"
-        elif "resolved" in status.lower():
-            level = "info"
-        alerts.append({
-            "date": a["date"],
-            "title": text[:60] + "..." if len(text) > 60 else text,
-            "desc": text,
-            "status": status,
-            "level": level,
-        })
-
-    return {
-        "business": profile,
-        "metrics": metrics,
-        "chart": chart_data,
-        "alerts": alerts,
-    }
-
 # ── Briefing cache ────────────────────────────────────────────────────────────
 _briefing_cache = {"text": None, "date": None}
 
 def generate_briefing():
-    """Generate a morning briefing using the LLM from real vault data."""
     from datetime import date
     today = str(date.today())
-
-    # Return cached briefing if already generated today
     if _briefing_cache["date"] == today and _briefing_cache["text"]:
         return _briefing_cache["text"]
-
-    # Build context from vault
     profile = parse_business_profile()
     months = parse_monthly_summary()
     anomalies = parse_anomalies()
-
     latest = months[-1] if months else {}
     previous = months[-2] if len(months) >= 2 else {}
-
     labour_pct = round((latest.get("labour", 0) / latest.get("revenue", 1)) * 100, 1)
     cogs_pct = round((latest.get("cogs", 0) / latest.get("revenue", 1)) * 100, 1)
     net_margin = round((latest.get("net", 0) / latest.get("revenue", 1)) * 100, 1)
     rev_change = round(((latest.get("revenue", 0) - previous.get("revenue", 1)) / previous.get("revenue", 1)) * 100, 1)
-
     open_anomalies = [a for a in anomalies if "resolved" not in a.get("status", "").lower()]
-
     context = f"""
 Business: {profile.get("name")}
 Owner: {profile.get("owner")}
@@ -282,7 +201,6 @@ Food cost: {cogs_pct}% of revenue (target: {profile.get("food_cost_target")}%)
 Active anomalies ({len(open_anomalies)} unresolved):
 {chr(10).join(["- " + a["text"].strip()[:120] for a in open_anomalies[:3]])}
 """
-
     prompt = f"""You are Cortex, a private business advisor. Write a morning briefing for the business owner.
 
 {context}
@@ -294,7 +212,6 @@ Rules:
 - Do not use bullet points. Do not start with "Good morning". Write plain prose.
 - Use the actual numbers from the data above.
 """
-
     try:
         response = ollama.chat(
             model="llama3.2",
@@ -306,59 +223,67 @@ Rules:
         text = response["message"]["content"].strip()
     except Exception as e:
         text = f"Revenue for {latest.get('month')} was ${latest.get('revenue', 0):,} with a {net_margin}% net margin. Labour is at {labour_pct}% — {'above' if labour_pct > profile.get('labour_cost_target', 30) else 'within'} your {profile.get('labour_cost_target')}% target."
-
     _briefing_cache["text"] = text
     _briefing_cache["date"] = today
     return text
 
+# ── API Endpoints ─────────────────────────────────────────────────────────────
 
-@app.get("/briefing")
+@app.get("/api/status")
+def status():
+    files = get_vault_files()
+    return {"status": "running", "vault_files": len(files), "model": "llama3.2"}
+
+@app.get("/api/business")
+def business():
+    return parse_business_profile()
+
+@app.get("/api/dashboard")
+def dashboard():
+    profile = parse_business_profile()
+    months = parse_monthly_summary()
+    metrics = compute_dashboard_metrics(months)
+    anomalies = parse_anomalies()
+    chart_data = [{"month": m["month"], "revenue": m["revenue"], "net": m["net"], "labour": m["labour"], "cogs": m["cogs"]} for m in months[-12:]]
+    alerts = []
+    for a in anomalies[:5]:
+        text = a["text"].strip()
+        status = a["status"]
+        level = "critical"
+        if "watch" in status.lower() or "monitor" in status.lower():
+            level = "warning"
+        elif "resolved" in status.lower():
+            level = "info"
+        alerts.append({"date": a["date"], "title": text[:60] + "..." if len(text) > 60 else text, "desc": text, "status": status, "level": level})
+    return {"business": profile, "metrics": metrics, "chart": chart_data, "alerts": alerts}
+
+@app.get("/api/alerts")
+def get_alerts():
+    return {"alerts": parse_anomalies()}
+
+@app.get("/api/report")
+def get_report():
+    monthly = parse_monthly_summary()
+    metrics = compute_dashboard_metrics(monthly)
+    return {"period": monthly[-1].get("month", "") if monthly else "", "metrics": metrics, "monthly_history": monthly}
+
+@app.get("/api/briefing")
 def get_briefing():
-    """Returns today's AI-generated morning briefing."""
     text = generate_briefing()
     return {"briefing": text, "date": _briefing_cache["date"]}
 
-
-@app.post("/briefing/refresh")
+@app.post("/api/briefing/refresh")
 def refresh_briefing():
-    """Force regenerate the briefing (clears cache)."""
     _briefing_cache["text"] = None
     _briefing_cache["date"] = None
     text = generate_briefing()
     return {"briefing": text}
 
-
-@app.get("/alerts")
-def get_alerts():
-    """Returns all anomalies from the anomaly log."""
-    return {"alerts": parse_anomalies()}
-
-@app.get("/report")
-def get_report():
-    """Returns the latest weekly briefing from the vault."""
-    content = read_vault_file("memory/owner-conversations.md")
-    monthly = parse_monthly_summary()
-    months = parse_monthly_summary()
-    metrics = compute_dashboard_metrics(months)
-
-    # Build a simple report from the latest month data
-    latest = monthly[-1] if monthly else {}
-    previous = monthly[-2] if len(monthly) >= 2 else {}
-
-    return {
-        "period": latest.get("month", ""),
-        "metrics": metrics,
-        "monthly_history": monthly,
-    }
-
-@app.post("/ask")
+@app.post("/api/ask")
 def ask(query: Query):
-    """Takes a question, pulls relevant vault context, asks Ollama."""
     context = get_context_for_query(query.question)
-
     if query.save_note:
         save_owner_note(query.question)
-
     full_prompt = f"""
 Here is everything I know about this business:
 
@@ -368,34 +293,42 @@ Here is everything I know about this business:
 
 Owner's question: {query.question}
 """
-
     response = ollama.chat(
         model="llama3.2",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": full_prompt}
+            {"role": "user", "content": full_prompt}
         ]
     )
+    return {"answer": response["message"]["content"]}
 
-    answer = response["message"]["content"]
-    return {"answer": answer}
-
-@app.get("/quickbooks/connect")
+@app.get("/api/quickbooks/connect")
 def quickbooks_connect():
     from backend.connectors.quickbooks import get_auth_url
-    url = get_auth_url()
-    return {"auth_url": url}
+    return {"auth_url": get_auth_url()}
 
-@app.get("/quickbooks/callback")
+@app.get("/api/quickbooks/callback")
 def quickbooks_callback(code: str, realmId: str):
     from backend.connectors.quickbooks import exchange_code_for_tokens
-    tokens = exchange_code_for_tokens(code, realmId)
+    exchange_code_for_tokens(code, realmId)
     return {"status": "connected", "realm_id": realmId}
 
-@app.get("/quickbooks/status")
+@app.get("/api/quickbooks/status")
 def quickbooks_status():
     from backend.connectors.quickbooks import load_tokens
     tokens = load_tokens()
     if tokens:
         return {"connected": True, "realm_id": tokens.get("realm_id")}
     return {"connected": False}
+
+# ── Serve React frontend ──────────────────────────────────────────────────────
+if os.path.exists(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+
+    @app.get("/favicon.svg")
+    def favicon():
+        return FileResponse(os.path.join(FRONTEND_DIST, "favicon.svg"))
+
+    @app.get("/{full_path:path}")
+    def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))

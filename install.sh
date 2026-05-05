@@ -45,11 +45,16 @@ fi
 echo "[ 2/10 ] Installing Homebrew..."
 if ! command -v brew &> /dev/null; then
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+fi
+
+# Always ensure brew is in PATH
+eval "$(/opt/homebrew/bin/brew shellenv zsh)"
+
+# Persist brew PATH for future terminal sessions
+if ! grep -q "brew shellenv" "$HOME/.zprofile" 2>/dev/null; then
     echo >> "$HOME/.zprofile"
     echo 'eval "$(/opt/homebrew/bin/brew shellenv zsh)"' >> "$HOME/.zprofile"
-    eval "$(/opt/homebrew/bin/brew shellenv zsh)"
-else
-    echo "         Already installed. Skipping."
+    echo "         Brew PATH saved to .zprofile"
 fi
 
 # ── Step 3 — Core dependencies ─────────────
@@ -106,7 +111,7 @@ LAUNCH_DIR="$HOME/Library/LaunchAgents"
 
 cp "$CORTEX_DIR/launchd/com.cortex.backend.plist" "$LAUNCH_DIR/"
 cp "$CORTEX_DIR/launchd/com.cortex.nightly.plist" "$LAUNCH_DIR/"
-cp "$CORTEX_DIR/launchd/com.cortex.updater.plist"  "$LAUNCH_DIR/"
+cp "$CORTEX_DIR/launchd/com.cortex.updater.plist" "$LAUNCH_DIR/"
 
 launchctl load "$LAUNCH_DIR/com.cortex.backend.plist" 2>/dev/null || true
 launchctl load "$LAUNCH_DIR/com.cortex.nightly.plist" 2>/dev/null || true
@@ -115,22 +120,45 @@ launchctl load "$LAUNCH_DIR/com.cortex.updater.plist" 2>/dev/null || true
 # ── Step 10 — SSH + Tailscale ──────────────
 echo "[ 10/10 ] Enabling remote support (SSH + Tailscale)..."
 
-echo "          Enabling SSH — you may be prompted for your Mac password."
-sudo systemsetup -setremotelogin on
+# Enable SSH via launchctl (works on macOS Sequoia without Full Disk Access)
+echo "          Enabling SSH..."
+sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist 2>/dev/null || \
+sudo launchctl enable system/com.openssh.sshd 2>/dev/null || \
+echo "          Note: Enable SSH manually via System Settings → General → Sharing → Remote Login"
 
+# Install and start Tailscale
 if ! command -v tailscale &> /dev/null; then
     brew install tailscale
 fi
 
 brew services start tailscale 2>/dev/null || true
-sleep 5
-sudo tailscaled 2>/dev/null &
 sleep 3
 
-echo "          Connecting to Cortex support network..."
-tailscale up --authkey="$TAILSCALE_KEY" --hostname="cortex-$(hostname -s)"
+# Start tailscaled if not running
+if ! pgrep -x tailscaled > /dev/null; then
+    sudo /opt/homebrew/opt/tailscale/bin/tailscaled --tun=userspace-networking > /dev/null 2>&1 &
+    sleep 5
+fi
 
-TAILSCALE_IP=$(tailscale ip 2>/dev/null || echo "check tailscale status")
+echo "          Connecting to Cortex support network..."
+tailscale up --authkey="$TAILSCALE_KEY" --hostname="cortex-$(hostname -s)" 2>/dev/null || \
+echo "          Tailscale: run 'tailscale up' manually if this failed."
+
+TAILSCALE_IP=$(tailscale ip 2>/dev/null || echo "run: tailscale ip")
+
+# ── Create config.py ───────────────────────
+echo "Creating config file..."
+cat > "$CORTEX_DIR/config.py" << 'CONFIGEOF'
+# Cortex local configuration
+# This file is never pushed to GitHub (.gitignore protects it)
+
+QUICKBOOKS_CLIENT_ID = "ABHAKBtdjQQvBeFvL9FjKFylLoYDL9eEMoOy65WQFWEAxb1e08"
+QUICKBOOKS_CLIENT_SECRET = "V3JkCSv6hsr1pgJZlIP2ovWsQIvDTYE4CnChC1Um"
+QUICKBOOKS_REDIRECT_URI = "http://localhost:8000/quickbooks/callback"
+
+VAULT_PATH = "/Users/g/CortexVault"
+OLLAMA_MODEL = "llama3.2"
+CONFIGEOF
 
 # ── Done ────────────────────────────────────
 echo ""
@@ -141,6 +169,14 @@ echo ""
 echo "  Dashboard:    http://127.0.0.1:8000"
 echo "  Tailscale IP: $TAILSCALE_IP"
 echo ""
-echo "  Next step: run the setup wizard."
-echo "  python3 $CORTEX_DIR/setup/wizard.py"
+echo "  ─────────────────────────────────────"
+echo "  Next step: Run the setup wizard"
+echo "  This connects your business tools"
+echo "  and enters your business details."
+echo "  ─────────────────────────────────────"
 echo ""
+
+# Run setup wizard
+cd "$CORTEX_DIR"
+source venv/bin/activate
+python3 setup/wizard.py
