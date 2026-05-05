@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -22,6 +23,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+VAULT_PATH = os.path.expanduser("~/CortexVault")
+
 class Query(BaseModel):
     question: str
     save_note: bool = False
@@ -40,13 +43,155 @@ Your rules — follow these exactly:
 - If asked about a specific number or statistic you cannot find, admit it clearly rather than guessing.
 """
 
+# ── Vault parsers ─────────────────────────────────────────────────────────────
+
+def read_vault_file(relative_path):
+    """Read a file from the vault, return empty string if not found."""
+    full_path = os.path.join(VAULT_PATH, relative_path)
+    if not os.path.exists(full_path):
+        return ""
+    with open(full_path, "r") as f:
+        return f.read()
+
+def parse_business_profile():
+    """Parse business-profile.md and return key fields."""
+    content = read_vault_file("core/business-profile.md")
+    result = {
+        "name": "My Business",
+        "industry": "",
+        "location": "",
+        "owner": "",
+        "employees_full": 0,
+        "employees_part": 0,
+        "revenue_target": 0,
+        "food_cost_target": 28,
+        "labour_cost_target": 30,
+    }
+    for line in content.splitlines():
+        if "**Name:**" in line:
+            result["name"] = line.split("**Name:**")[-1].strip()
+        elif "**Industry:**" in line:
+            result["industry"] = line.split("**Industry:**")[-1].strip()
+        elif "**Location:**" in line:
+            result["location"] = line.split("**Location:**")[-1].strip()
+        elif "**Owner:**" in line:
+            result["owner"] = line.split("**Owner:**")[-1].strip()
+        elif "**Full-time employees:**" in line:
+            try:
+                result["employees_full"] = int(re.search(r'\d+', line).group())
+            except:
+                pass
+        elif "**Part-time employees:**" in line:
+            try:
+                result["employees_part"] = int(re.search(r'\d+', line).group())
+            except:
+                pass
+        elif "Average monthly revenue" in line:
+            m = re.search(r'\$([0-9,]+)', line)
+            if m:
+                result["revenue_target"] = int(m.group(1).replace(",", ""))
+        elif "food cost target" in line.lower():
+            m = re.search(r'(\d+)%', line)
+            if m:
+                result["food_cost_target"] = int(m.group(1))
+        elif "labour cost target" in line.lower():
+            m = re.search(r'(\d+)%', line)
+            if m:
+                result["labour_cost_target"] = int(m.group(1))
+    return result
+
+def parse_monthly_summary():
+    """Parse monthly-summary.md table and return list of monthly records."""
+    content = read_vault_file("financials/monthly-summary.md")
+    months = []
+    for line in content.splitlines():
+        if line.startswith("|") and "---" not in line and "Month" not in line:
+            parts = [p.strip() for p in line.split("|") if p.strip()]
+            if len(parts) >= 7:
+                def parse_dollar(s):
+                    try:
+                        return int(re.sub(r'[^\d]', '', s))
+                    except:
+                        return 0
+                months.append({
+                    "month": parts[0],
+                    "revenue": parse_dollar(parts[1]),
+                    "cogs": parse_dollar(parts[2]),
+                    "labour": parse_dollar(parts[3]),
+                    "rent": parse_dollar(parts[4]),
+                    "other": parse_dollar(parts[5]),
+                    "net": parse_dollar(parts[6]),
+                })
+    return months
+
+def parse_anomalies():
+    """Parse anomaly-log.md and return list of alerts."""
+    content = read_vault_file("memory/anomaly-log.md")
+    alerts = []
+    current = None
+    for line in content.splitlines():
+        if line.startswith("## "):
+            if current:
+                alerts.append(current)
+            date = line.replace("## ", "").strip()
+            current = {"date": date, "text": "", "status": ""}
+        elif current is not None:
+            if line.startswith("Status:"):
+                current["status"] = line.replace("Status:", "").strip()
+            elif line.strip():
+                current["text"] += line.strip() + " "
+    if current:
+        alerts.append(current)
+    # Reverse so newest first, skip empty ones
+    alerts = [a for a in alerts if a["text"].strip()]
+    alerts.reverse()
+    return alerts
+
+def parse_weekly_trends():
+    """Parse weekly-trends.md for day of week data."""
+    content = read_vault_file("revenue/weekly-trends.md")
+    return content
+
+def compute_dashboard_metrics(months):
+    """Compute key metrics from monthly data."""
+    if not months:
+        return {}
+
+    latest = months[-1]
+    previous = months[-2] if len(months) >= 2 else latest
+
+    revenue = latest["revenue"]
+    prev_revenue = previous["revenue"]
+    labour = latest["labour"]
+    cogs = latest["cogs"]
+    net = latest["net"]
+    total_costs = labour + cogs + latest["rent"] + latest["other"]
+
+    labour_pct = round((labour / revenue * 100), 1) if revenue else 0
+    cogs_pct = round((cogs / revenue * 100), 1) if revenue else 0
+    net_margin = round((net / revenue * 100), 1) if revenue else 0
+    revenue_change = round(((revenue - prev_revenue) / prev_revenue * 100), 1) if prev_revenue else 0
+
+    return {
+        "latest_month": latest["month"],
+        "revenue": revenue,
+        "revenue_change_pct": revenue_change,
+        "net_profit": net,
+        "net_margin_pct": net_margin,
+        "labour_cost": labour,
+        "labour_pct": labour_pct,
+        "cogs": cogs,
+        "cogs_pct": cogs_pct,
+    }
+
+# ── API Endpoints ─────────────────────────────────────────────────────────────
+
 @app.get("/")
 def root():
     return {"status": "Cortex is running"}
 
 @app.get("/status")
 def status():
-    """Returns basic vault status."""
     files = get_vault_files()
     return {
         "status": "running",
@@ -54,10 +199,76 @@ def status():
         "model": "llama3.2"
     }
 
+@app.get("/business")
+def business():
+    """Returns business profile info from vault."""
+    return parse_business_profile()
+
+@app.get("/dashboard")
+def dashboard():
+    """Returns all dashboard metrics from real vault data."""
+    profile = parse_business_profile()
+    months = parse_monthly_summary()
+    metrics = compute_dashboard_metrics(months)
+    anomalies = parse_anomalies()
+
+    # Revenue trend for chart (last 12 months)
+    chart_data = [
+        {"month": m["month"], "revenue": m["revenue"], "net": m["net"]}
+        for m in months[-12:]
+    ]
+
+    # Latest anomalies for alerts panel (top 5)
+    alerts = []
+    for a in anomalies[:5]:
+        text = a["text"].strip()
+        status = a["status"]
+        level = "critical"
+        if "watch" in status.lower() or "monitor" in status.lower():
+            level = "warning"
+        elif "resolved" in status.lower():
+            level = "info"
+        alerts.append({
+            "date": a["date"],
+            "title": text[:60] + "..." if len(text) > 60 else text,
+            "desc": text,
+            "status": status,
+            "level": level,
+        })
+
+    return {
+        "business": profile,
+        "metrics": metrics,
+        "chart": chart_data,
+        "alerts": alerts,
+    }
+
+@app.get("/alerts")
+def get_alerts():
+    """Returns all anomalies from the anomaly log."""
+    return {"alerts": parse_anomalies()}
+
+@app.get("/report")
+def get_report():
+    """Returns the latest weekly briefing from the vault."""
+    content = read_vault_file("memory/owner-conversations.md")
+    monthly = parse_monthly_summary()
+    months = parse_monthly_summary()
+    metrics = compute_dashboard_metrics(months)
+
+    # Build a simple report from the latest month data
+    latest = monthly[-1] if monthly else {}
+    previous = monthly[-2] if len(monthly) >= 2 else {}
+
+    return {
+        "period": latest.get("month", ""),
+        "metrics": metrics,
+        "monthly_history": monthly,
+    }
+
 @app.post("/ask")
 def ask(query: Query):
     """Takes a question, pulls relevant vault context, asks Ollama."""
-
     context = get_context_for_query(query.question)
 
     if query.save_note:
@@ -86,21 +297,18 @@ Owner's question: {query.question}
 
 @app.get("/quickbooks/connect")
 def quickbooks_connect():
-    """Returns the URL to start QuickBooks OAuth flow."""
     from backend.connectors.quickbooks import get_auth_url
     url = get_auth_url()
     return {"auth_url": url}
 
 @app.get("/quickbooks/callback")
 def quickbooks_callback(code: str, realmId: str):
-    """Handles the OAuth callback from QuickBooks."""
     from backend.connectors.quickbooks import exchange_code_for_tokens
     tokens = exchange_code_for_tokens(code, realmId)
     return {"status": "connected", "realm_id": realmId}
 
 @app.get("/quickbooks/status")
 def quickbooks_status():
-    """Checks if QuickBooks is connected."""
     from backend.connectors.quickbooks import load_tokens
     tokens = load_tokens()
     if tokens:
