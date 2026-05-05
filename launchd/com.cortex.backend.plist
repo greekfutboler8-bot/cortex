@@ -4,30 +4,31 @@
 <dict>
     <key>Label</key>
     <string>com.cortex.backend</string>
-
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/gm/cortex/venv/bin/uvicorn</string>
+        <string>/Users/g/cortex/venv/bin/python</string>
+        <string>-m</string>
+        <string>uvicorn</string>
         <string>backend.main:app</string>
-        <string>--host</string>
-        <string>127.0.0.1</string>
         <string>--port</string>
         <string>8000</string>
     </array>
-
     <key>WorkingDirectory</key>
-    <string>/Users/gm/cortex</string>
-
+    <string>/Users/g/cortex</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>/Users/g</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
-
     <key>KeepAlive</key>
     <true/>
-
     <key>StandardOutPath</key>
-    <string>/Users/gm/cortex/logs/backend.log</string>
-
+    <string>/Users/g/cortex/logs/backend.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/gm/cortex/logs/backend-error.log</string>
+    <string>/Users/g/cortex/logs/backend-error.log</string>
 </dict>
 </plist>
