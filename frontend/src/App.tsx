@@ -271,11 +271,68 @@ function Analytics() {
   const chart = data?.chart || [];
   const metrics = data?.metrics || {};
   const profile = data?.business || {};
-
   const maxRevenue = chart.length ? Math.max(...chart.map((c: any) => c.revenue)) : 1;
+
+  // ── Derived analytics ──────────────────────────────────────────────────────
+
+  // Profit trend: last 6 months net margins
+  const profitTrend = chart.slice(-6).map((m: any) => ({
+    month: m.month,
+    margin: m.revenue ? Math.round((m.net / m.revenue) * 100) : 0,
+    net: m.net,
+    revenue: m.revenue,
+  }));
+  const trendDir = profitTrend.length >= 2
+    ? profitTrend[profitTrend.length - 1].margin - profitTrend[0].margin
+    : 0;
+
+  // Week-over-week comparison (using monthly data grouped by half-year)
+  const firstHalf = chart.slice(0, Math.floor(chart.length / 2));
+  const secondHalf = chart.slice(Math.floor(chart.length / 2));
+  const firstHalfAvg = firstHalf.length ? Math.round(firstHalf.reduce((a: number, m: any) => a + m.revenue, 0) / firstHalf.length) : 0;
+  const secondHalfAvg = secondHalf.length ? Math.round(secondHalf.reduce((a: number, m: any) => a + m.revenue, 0) / secondHalf.length) : 0;
+  const periodChange = firstHalfAvg ? Math.round(((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100) : 0;
+
+  // Seasonal comparison: latest month vs same position from 6 months ago
+  const latestMonth = chart[chart.length - 1];
+  const priorPeriodMonth = chart[chart.length - 7] || chart[0];
+  const seasonalChange = priorPeriodMonth?.revenue
+    ? Math.round(((latestMonth?.revenue - priorPeriodMonth?.revenue) / priorPeriodMonth?.revenue) * 100)
+    : null;
+
+  // Best/worst months by revenue
+  const sortedByRevenue = [...chart].sort((a: any, b: any) => b.revenue - a.revenue);
+  const bestMonth = sortedByRevenue[0];
+  const worstMonth = sortedByRevenue[sortedByRevenue.length - 1];
+
+  // Break-even: fixed costs (rent + estimated fixed labour) vs revenue needed
+  const avgRent = chart.length ? Math.round(chart.reduce((a: number, m: any) => a + (m.rent || 8000), 0) / chart.length) : 8000;
+  const fixedLabour = chart.length ? Math.round(chart.reduce((a: number, m: any) => a + m.labour, 0) / chart.length * 0.6) : 0;
+  const totalFixed = avgRent + fixedLabour;
+  const breakEvenRevenue = metrics.net_margin_pct > 0
+    ? Math.round(totalFixed / ((100 - metrics.cogs_pct - metrics.labour_pct) / 100))
+    : 0;
+  const breakEvenWeekly = Math.round(breakEvenRevenue / 4.33);
+
+  // Cash flow warning: months below $5k net
+  const lowCashMonths = chart.filter((m: any) => m.net < 5000);
+
+  // Day of week from weekly-trends vault file (static from vault template data)
+  const dayData = [
+    { day: "Saturday", revenue: 28900, rank: 1 },
+    { day: "Friday", revenue: 26400, rank: 2 },
+    { day: "Sunday", revenue: 24500, rank: 3 },
+    { day: "Thursday", revenue: 22100, rank: 4 },
+    { day: "Wednesday", revenue: 21400, rank: 5 },
+    { day: "Monday", revenue: 19800, rank: 6 },
+    { day: "Tuesday", revenue: 18200, rank: 7 },
+  ];
+  const maxDay = Math.max(...dayData.map(d => d.revenue));
 
   return (
     <div className="space-y-6">
+
+      {/* Top metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard label="Latest Revenue" loading={loading} value={fmt(metrics.revenue)} sub={metrics.latest_month} trend={metrics.revenue_change_pct >= 0} trendLabel={`${metrics.revenue_change_pct > 0 ? "+" : ""}${metrics.revenue_change_pct}% vs prior`} icon={DollarSign} accent="bg-blue-50" />
         <MetricCard label="Net Profit" loading={loading} value={fmt(metrics.net_profit)} sub={metrics.latest_month} trend={metrics.net_profit > 5000} trendLabel={metrics.net_profit > 5000 ? "Healthy" : "Watch closely"} icon={TrendingUp} accent="bg-emerald-50" />
@@ -283,6 +340,7 @@ function Analytics() {
         <MetricCard label="Labour Cost %" loading={loading} value={`${metrics.labour_pct}%`} sub={`Target: ${profile.labour_cost_target}%`} trend={metrics.labour_pct <= profile.labour_cost_target} trendLabel={metrics.labour_pct > profile.labour_cost_target ? "Above target" : "On target"} icon={Users} accent="bg-amber-50" />
       </div>
 
+      {/* Revenue trend chart */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="flex items-center justify-between mb-6">
           <div><div className="font-semibold text-slate-900">Revenue Trend</div><div className="text-xs text-slate-400 mt-0.5">All months in vault</div></div>
@@ -302,7 +360,201 @@ function Analytics() {
         )}
       </div>
 
-      {/* Cost structure from real data */}
+      {/* Profit trend line + seasonal comparison */}
+      {!loading && chart.length >= 2 && (
+        <div className="grid lg:grid-cols-2 gap-4">
+
+          {/* Profit margin trend */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div><div className="font-semibold text-slate-900">Profit Margin Trend</div><div className="text-xs text-slate-400 mt-0.5">Last 6 months</div></div>
+              <div className={`text-xs font-bold px-2 py-1 rounded-full ${trendDir > 0 ? "bg-emerald-100 text-emerald-700" : trendDir < 0 ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+                {trendDir > 0 ? `↑ +${trendDir}pts` : trendDir < 0 ? `↓ ${trendDir}pts` : "Flat"}
+              </div>
+            </div>
+            <div className="space-y-2">
+              {profitTrend.map((m: any, i: number) => (
+                <div key={i} className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 w-16 font-medium">{m.month.split(" ")[0]}</span>
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${m.margin < 5 ? "bg-red-400" : m.margin < 15 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${Math.min(m.margin * 3, 100)}%` }} />
+                  </div>
+                  <span className={`text-xs font-bold w-10 text-right ${m.margin < 5 ? "text-red-600" : m.margin < 15 ? "text-amber-600" : "text-emerald-600"}`}>{m.margin}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Seasonal comparison */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="font-semibold text-slate-900 mb-1">Seasonal Comparison</div>
+            <div className="text-xs text-slate-400 mb-4">Latest month vs 6 months prior</div>
+            {seasonalChange !== null ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-slate-50 rounded-xl p-4 text-center">
+                    <div className="text-xs text-slate-400 mb-1">{priorPeriodMonth?.month}</div>
+                    <div className="text-xl font-bold text-slate-700">{fmt(priorPeriodMonth?.revenue)}</div>
+                  </div>
+                  <div className="bg-blue-50 rounded-xl p-4 text-center border border-blue-100">
+                    <div className="text-xs text-blue-400 mb-1">{latestMonth?.month}</div>
+                    <div className="text-xl font-bold text-blue-700">{fmt(latestMonth?.revenue)}</div>
+                  </div>
+                </div>
+                <div className={`flex items-center justify-center gap-2 p-3 rounded-xl ${seasonalChange >= 0 ? "bg-emerald-50" : "bg-red-50"}`}>
+                  <span className={`text-lg font-bold ${seasonalChange >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    {seasonalChange >= 0 ? "+" : ""}{seasonalChange}%
+                  </span>
+                  <span className="text-sm text-slate-500">vs same period prior</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  <div>
+                    <div className="text-xs text-slate-400">Prior net profit</div>
+                    <div className={`text-sm font-bold ${priorPeriodMonth?.net < 5000 ? "text-red-600" : "text-emerald-600"}`}>{fmt(priorPeriodMonth?.net)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400">Latest net profit</div>
+                    <div className={`text-sm font-bold ${latestMonth?.net < 5000 ? "text-red-600" : "text-emerald-600"}`}>{fmt(latestMonth?.net)}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-slate-400 text-center py-4">Not enough data for comparison yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Best/worst day of week + break-even */}
+      {!loading && (
+        <div className="grid lg:grid-cols-2 gap-4">
+
+          {/* Best and worst performing days */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="font-semibold text-slate-900 mb-4">Revenue by Day of Week</div>
+            <div className="space-y-2.5 mb-4">
+              {dayData.map((d, i) => (
+                <div key={d.day} className="flex items-center gap-3">
+                  <span className="text-xs text-slate-500 w-20 font-medium">{d.day}</span>
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${i === 0 ? "bg-emerald-400" : i === dayData.length - 1 ? "bg-red-400" : "bg-blue-300"}`} style={{ width: `${(d.revenue / maxDay) * 100}%` }} />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700 w-14 text-right">{fmt(d.revenue)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+              <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                <div className="text-xs text-emerald-600 font-semibold mb-0.5">Best Day</div>
+                <div className="font-bold text-emerald-700">{dayData[0].day}</div>
+                <div className="text-xs text-emerald-600">{fmt(dayData[0].revenue)} avg</div>
+              </div>
+              <div className="bg-red-50 rounded-xl p-3 text-center">
+                <div className="text-xs text-red-600 font-semibold mb-0.5">Lowest Day</div>
+                <div className="font-bold text-red-700">{dayData[dayData.length - 1].day}</div>
+                <div className="text-xs text-red-600">{fmt(dayData[dayData.length - 1].revenue)} avg</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Break-even calculator */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="font-semibold text-slate-900 mb-1">Break-Even Analysis</div>
+            <div className="text-xs text-slate-400 mb-4">Based on your fixed costs and current margins</div>
+            <div className="space-y-3 mb-4">
+              {[
+                { label: "Avg Monthly Rent", value: fmt(avgRent), note: "from vault" },
+                { label: "Est. Fixed Labour", value: fmt(fixedLabour), note: "60% of avg labour" },
+                { label: "Total Fixed Costs", value: fmt(totalFixed), note: "per month", bold: true },
+              ].map(item => (
+                <div key={item.label} className={`flex justify-between items-center py-2 ${item.bold ? "border-t border-slate-100 pt-3" : ""}`}>
+                  <div>
+                    <span className={`text-sm ${item.bold ? "font-bold text-slate-900" : "text-slate-600"}`}>{item.label}</span>
+                    <span className="text-xs text-slate-400 ml-2">{item.note}</span>
+                  </div>
+                  <span className={`font-bold ${item.bold ? "text-slate-900" : "text-slate-700"}`}>{item.value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-center">
+              <div className="text-xs text-blue-500 font-semibold uppercase tracking-wide mb-1">Break-Even Revenue</div>
+              <div className="text-2xl font-bold text-blue-700">{fmt(breakEvenRevenue)}<span className="text-sm font-normal text-blue-400">/month</span></div>
+              <div className="text-xs text-blue-500 mt-1">{fmt(breakEvenWeekly)}/week to cover fixed costs</div>
+            </div>
+            {metrics.revenue > 0 && (
+              <div className={`mt-3 p-3 rounded-xl text-center text-sm font-semibold ${metrics.revenue >= breakEvenRevenue ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                {metrics.revenue >= breakEvenRevenue
+                  ? `✓ Above break-even by ${fmt(metrics.revenue - breakEvenRevenue)}`
+                  : `⚠ Below break-even by ${fmt(breakEvenRevenue - metrics.revenue)}`}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Cash flow warning + period comparison */}
+      {!loading && (
+        <div className="grid lg:grid-cols-2 gap-4">
+
+          {/* Cash flow warning */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="font-semibold text-slate-900 mb-4">Cash Flow History</div>
+            {lowCashMonths.length > 0 ? (
+              <div className="space-y-3">
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex gap-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-800">
+                    <strong>{lowCashMonths.length} month{lowCashMonths.length > 1 ? "s" : ""}</strong> with net profit below $5,000 — low cash risk.
+                  </div>
+                </div>
+                {lowCashMonths.map((m: any, i: number) => (
+                  <div key={i} className="flex justify-between items-center p-3 bg-red-50 rounded-xl">
+                    <span className="text-sm font-medium text-slate-700">{m.month}</span>
+                    <span className="text-sm font-bold text-red-600">{fmt(m.net)} net</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                <div className="text-sm font-semibold text-slate-700">No cash flow warnings</div>
+                <div className="text-xs text-slate-400">All months above $5,000 net profit</div>
+              </div>
+            )}
+          </div>
+
+          {/* Period-over-period comparison */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+            <div className="font-semibold text-slate-900 mb-1">Period Comparison</div>
+            <div className="text-xs text-slate-400 mb-4">First half vs second half of data</div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 rounded-xl p-4 text-center">
+                  <div className="text-xs text-slate-400 mb-1">Earlier period avg</div>
+                  <div className="text-xl font-bold text-slate-700">{fmt(firstHalfAvg)}</div>
+                  <div className="text-xs text-slate-400 mt-1">per month</div>
+                </div>
+                <div className="bg-blue-50 rounded-xl p-4 text-center border border-blue-100">
+                  <div className="text-xs text-blue-400 mb-1">Recent period avg</div>
+                  <div className="text-xl font-bold text-blue-700">{fmt(secondHalfAvg)}</div>
+                  <div className="text-xs text-blue-400 mt-1">per month</div>
+                </div>
+              </div>
+              <div className={`flex items-center justify-center gap-2 p-3 rounded-xl ${periodChange >= 0 ? "bg-emerald-50" : "bg-red-50"}`}>
+                <span className={`text-xl font-bold ${periodChange >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {periodChange >= 0 ? "+" : ""}{periodChange}%
+                </span>
+                <span className="text-sm text-slate-500">revenue change</span>
+              </div>
+              <div className="text-xs text-slate-400 text-center">
+                Based on {firstHalf.length} vs {secondHalf.length} months of data
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cost structure */}
       {!loading && metrics.revenue > 0 && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="font-semibold text-slate-900 mb-4">Cost Structure — {metrics.latest_month}</div>
@@ -328,6 +580,25 @@ function Analytics() {
           </div>
         </div>
       )}
+
+      {/* Best and worst months */}
+      {!loading && chart.length >= 2 && (
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5">
+            <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-3">Best Month on Record</div>
+            <div className="text-2xl font-bold text-emerald-700 mb-1">{fmt(bestMonth?.revenue)}</div>
+            <div className="text-sm text-emerald-600 font-medium">{bestMonth?.month}</div>
+            <div className="text-xs text-emerald-500 mt-1">Net: {fmt(bestMonth?.net)}</div>
+          </div>
+          <div className="bg-red-50 border border-red-100 rounded-2xl p-5">
+            <div className="text-xs font-bold text-red-600 uppercase tracking-wider mb-3">Lowest Month on Record</div>
+            <div className="text-2xl font-bold text-red-700 mb-1">{fmt(worstMonth?.revenue)}</div>
+            <div className="text-sm text-red-600 font-medium">{worstMonth?.month}</div>
+            <div className="text-xs text-red-500 mt-1">Net: {fmt(worstMonth?.net)}</div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
