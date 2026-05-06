@@ -523,46 +523,226 @@ function Alerts() {
 
 // ── Settings Tab ──────────────────────────────────────────────────────────────
 function SettingsTab() {
-  const { data, loading } = useAPI<any>("/api/business", null);
+  const { data: business, loading: bizLoading } = useAPI<any>("/api/business", null);
+  const { data: qbStatus } = useAPI<any>("/api/quickbooks/status", { connected: false });
+  const [activePanel, setActivePanel] = React.useState<string | null>(null);
+  const [thresholds, setThresholds] = React.useState({ food: 28, labour: 30, cash: 5000 });
+  const [briefingHour, setBriefingHour] = React.useState(7);
+  const [digestSources, setDigestSources] = React.useState({ quickbooks: true, square: false, csv: true });
+  const [saved, setSaved] = React.useState<string | null>(null);
+
+  const toggle = (panel: string) => setActivePanel(activePanel === panel ? null : panel);
+
+  const showSaved = (label: string) => {
+    setSaved(label);
+    setTimeout(() => setSaved(null), 2000);
+  };
 
   return (
-    <div className="space-y-4 max-w-2xl">
-      {/* Business profile summary */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <div className="font-semibold text-slate-900 mb-4">Business Profile</div>
-        {loading ? <div className="flex items-center gap-2"><Spinner /><span className="text-xs text-slate-400">Loading...</span></div> : (
-          <div className="space-y-3 text-sm">
-            {[
-              { label: "Business Name", value: data?.name },
-              { label: "Industry", value: data?.industry },
-              { label: "Location", value: data?.location },
-              { label: "Owner", value: data?.owner },
-              { label: "Employees", value: `${data?.employees_full} full-time, ${data?.employees_part} part-time` },
-              { label: "Food Cost Target", value: `${data?.food_cost_target}%` },
-              { label: "Labour Cost Target", value: `${data?.labour_cost_target}%` },
-            ].map(item => (
-              <div key={item.label} className="flex justify-between items-center py-2 border-b border-slate-50">
-                <span className="text-slate-500">{item.label}</span>
-                <span className="font-medium text-slate-900">{item.value || "—"}</span>
+    <div className="space-y-3 max-w-2xl">
+
+      {/* DATA CONNECTIONS */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <button onClick={() => toggle("connections")} className="w-full p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left">
+          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0"><Activity className="w-5 h-5 text-blue-500" /></div>
+          <div className="flex-1"><div className="font-semibold text-slate-900 text-sm">Data Connections</div><div className="text-xs text-slate-400 mt-0.5">QuickBooks, Square, CSV folder</div></div>
+          <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${activePanel === "connections" ? "rotate-90" : ""}`} />
+        </button>
+        {activePanel === "connections" && (
+          <div className="border-t border-slate-100 p-5 space-y-4">
+            {/* QuickBooks */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">QuickBooks</div>
+                  <div className="text-xs text-slate-400">Accounting & payroll</div>
+                </div>
               </div>
-            ))}
+              <div className="flex items-center gap-3">
+                <div className={`flex items-center gap-1.5 text-xs font-semibold ${qbStatus?.connected ? "text-emerald-600" : "text-slate-400"}`}>
+                  <div className={`w-2 h-2 rounded-full ${qbStatus?.connected ? "bg-emerald-400" : "bg-slate-300"}`} />
+                  {qbStatus?.connected ? "Connected" : "Not connected"}
+                </div>
+                {!qbStatus?.connected && (
+                  <a href="/api/quickbooks/connect" className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-700 transition-colors">Connect</a>
+                )}
+              </div>
+            </div>
+            {/* Square */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Square</div>
+                  <div className="text-xs text-slate-400">POS & payments</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                  <div className="w-2 h-2 rounded-full bg-slate-300" />
+                  Not connected
+                </div>
+                <button className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-700 transition-colors">Connect</button>
+              </div>
+            </div>
+            {/* CSV */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">CSV / Excel</div>
+                  <div className="text-xs text-slate-400">Drop files in ~/CortexWatch</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                Active
+              </div>
+            </div>
           </div>
         )}
-        <p className="text-xs text-slate-400 mt-4">Edit in: ~/CortexVault/core/business-profile.md</p>
       </div>
 
-      {[
-        { label: "Data Connections", desc: "QuickBooks, Square, Shopify, CSV folder", icon: Activity },
-        { label: "Alert Thresholds", desc: "Customize when Cortex flags anomalies", icon: AlertTriangle },
-        { label: "Briefing Schedule", desc: "What time you receive morning reports", icon: Clock },
-        { label: "Digest Settings", desc: "Configure nightly analysis behavior", icon: RefreshCw },
-      ].map(item => (
-        <button key={item.label} className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-shadow text-left">
-          <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center flex-shrink-0"><item.icon className="w-5 h-5 text-slate-500" /></div>
-          <div className="flex-1"><div className="font-semibold text-slate-900 text-sm">{item.label}</div><div className="text-xs text-slate-400 mt-0.5">{item.desc}</div></div>
-          <ChevronRight className="w-4 h-4 text-slate-300" />
+      {/* ALERT THRESHOLDS */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <button onClick={() => toggle("thresholds")} className="w-full p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left">
+          <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-500" /></div>
+          <div className="flex-1"><div className="font-semibold text-slate-900 text-sm">Alert Thresholds</div><div className="text-xs text-slate-400 mt-0.5">Customize when Cortex flags anomalies</div></div>
+          <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${activePanel === "thresholds" ? "rotate-90" : ""}`} />
         </button>
-      ))}
+        {activePanel === "thresholds" && (
+          <div className="border-t border-slate-100 p-5 space-y-6">
+            {[
+              { label: "Food Cost Alert", key: "food", min: 15, max: 50, unit: "%" },
+              { label: "Labour Cost Alert", key: "labour", min: 15, max: 60, unit: "%" },
+              { label: "Minimum Cash On Hand", key: "cash", min: 0, max: 50000, unit: "$" },
+            ].map(item => (
+              <div key={item.key}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-semibold text-slate-700">{item.label}</span>
+                  <span className="text-sm font-bold text-slate-900">{item.unit === "$" ? `$${thresholds[item.key as keyof typeof thresholds].toLocaleString()}` : `${thresholds[item.key as keyof typeof thresholds]}%`}</span>
+                </div>
+                <input
+                  type="range" min={item.min} max={item.max}
+                  step={item.key === "cash" ? 500 : 1}
+                  value={thresholds[item.key as keyof typeof thresholds]}
+                  onChange={e => setThresholds(t => ({ ...t, [item.key]: parseInt(e.target.value) }))}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                  <span>{item.unit === "$" ? `$${item.min}` : `${item.min}%`}</span>
+                  <span>{item.unit === "$" ? `$${item.max.toLocaleString()}` : `${item.max}%`}</span>
+                </div>
+              </div>
+            ))}
+            <button onClick={() => showSaved("thresholds")} className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700 transition-colors">
+              {saved === "thresholds" ? "✓ Saved" : "Save Thresholds"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* BRIEFING SCHEDULE */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <button onClick={() => toggle("briefing")} className="w-full p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left">
+          <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center flex-shrink-0"><Clock className="w-5 h-5 text-sky-500" /></div>
+          <div className="flex-1"><div className="font-semibold text-slate-900 text-sm">Briefing Schedule</div><div className="text-xs text-slate-400 mt-0.5">What time you receive your morning briefing</div></div>
+          <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${activePanel === "briefing" ? "rotate-90" : ""}`} />
+        </button>
+        {activePanel === "briefing" && (
+          <div className="border-t border-slate-100 p-5 space-y-4">
+            <p className="text-sm text-slate-500">Choose the time Cortex generates your daily briefing. The nightly digest runs at 2am, so briefing times from 6am onward will have fresh data.</p>
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold text-slate-700">Briefing Time</span>
+                <span className="text-sm font-bold text-slate-900">{briefingHour < 12 ? `${briefingHour}:00 AM` : briefingHour === 12 ? "12:00 PM" : `${briefingHour - 12}:00 PM`}</span>
+              </div>
+              <input type="range" min={5} max={11} step={1} value={briefingHour} onChange={e => setBriefingHour(parseInt(e.target.value))} className="w-full" />
+              <div className="flex justify-between text-xs text-slate-400 mt-1"><span>5:00 AM</span><span>11:00 AM</span></div>
+            </div>
+            <button onClick={() => showSaved("briefing")} className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700 transition-colors">
+              {saved === "briefing" ? "✓ Saved" : "Save Schedule"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* DIGEST SETTINGS */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <button onClick={() => toggle("digest")} className="w-full p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left">
+          <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center flex-shrink-0"><RefreshCw className="w-5 h-5 text-purple-500" /></div>
+          <div className="flex-1"><div className="font-semibold text-slate-900 text-sm">Digest Settings</div><div className="text-xs text-slate-400 mt-0.5">Configure nightly analysis behavior</div></div>
+          <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${activePanel === "digest" ? "rotate-90" : ""}`} />
+        </button>
+        {activePanel === "digest" && (
+          <div className="border-t border-slate-100 p-5 space-y-4">
+            <p className="text-sm text-slate-500">Choose which data sources feed the nightly digest. Only connected sources will be active.</p>
+            {[
+              { key: "quickbooks", label: "QuickBooks", desc: "Accounting and payroll data", connected: qbStatus?.connected },
+              { key: "square", label: "Square", desc: "POS sales and labor data", connected: false },
+              { key: "csv", label: "CSV / Excel", desc: "Manual file drops from any system", connected: true },
+            ].map(item => (
+              <div key={item.key} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">{item.label}</div>
+                  <div className="text-xs text-slate-400 mt-0.5">{item.desc}</div>
+                  {!item.connected && <div className="text-xs text-amber-500 mt-1">Not connected — go to Data Connections</div>}
+                </div>
+                <button
+                  onClick={() => item.connected && setDigestSources(s => ({ ...s, [item.key]: !s[item.key as keyof typeof s] }))}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${digestSources[item.key as keyof typeof digestSources] && item.connected ? "bg-blue-500" : "bg-slate-200"} ${!item.connected ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${digestSources[item.key as keyof typeof digestSources] && item.connected ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => showSaved("digest")} className="w-full bg-slate-900 text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700 transition-colors">
+              {saved === "digest" ? "✓ Saved" : "Save Settings"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* BUSINESS PROFILE */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <button onClick={() => toggle("profile")} className="w-full p-5 flex items-center gap-4 hover:bg-slate-50 transition-colors text-left">
+          <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center flex-shrink-0"><Coffee className="w-5 h-5 text-emerald-500" /></div>
+          <div className="flex-1"><div className="font-semibold text-slate-900 text-sm">Business Profile</div><div className="text-xs text-slate-400 mt-0.5">Your business details from the vault</div></div>
+          <ChevronRight className={`w-4 h-4 text-slate-300 transition-transform ${activePanel === "profile" ? "rotate-90" : ""}`} />
+        </button>
+        {activePanel === "profile" && (
+          <div className="border-t border-slate-100 p-5">
+            {bizLoading ? <div className="flex items-center gap-2"><Spinner /><span className="text-xs text-slate-400">Loading...</span></div> : (
+              <div className="space-y-3 text-sm">
+                {[
+                  { label: "Business Name", value: business?.name },
+                  { label: "Industry", value: business?.industry },
+                  { label: "Location", value: business?.location },
+                  { label: "Owner", value: business?.owner },
+                  { label: "Full-time Staff", value: business?.employees_full },
+                  { label: "Part-time Staff", value: business?.employees_part },
+                  { label: "Food Cost Target", value: `${business?.food_cost_target}%` },
+                  { label: "Labour Cost Target", value: `${business?.labour_cost_target}%` },
+                ].map(item => (
+                  <div key={item.label} className="flex justify-between items-center py-2 border-b border-slate-50">
+                    <span className="text-slate-500">{item.label}</span>
+                    <span className="font-medium text-slate-900">{item.value || "—"}</span>
+                  </div>
+                ))}
+                <p className="text-xs text-slate-400 pt-2">To edit: ~/CortexVault/core/business-profile.md</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
