@@ -1,0 +1,147 @@
+import os
+import json
+import requests
+from datetime import datetime, timedelta
+
+SQUARE_SANDBOX_APP_ID = "sandbox-sq0idb-XdHFr3Iex9pyoAQM6PXE9g"
+SQUARE_SANDBOX_TOKEN = "EAAAlxvl1uUCf91XQQMnFz9MgZqjkc5qVjHogdfwPYpkbnNBAgjMCoaKydCFc9su"
+SQUARE_BASE_URL = "https://connect.squareupsandbox.com/v2"
+
+VAULT_PATH = os.path.expanduser("~/CortexVault")
+TOKENS_FILE = os.path.join(VAULT_PATH, "integrations/square_tokens.json")
+
+def get_headers(token=None):
+    t = token or SQUARE_SANDBOX_TOKEN
+    return {
+        "Authorization": f"Bearer {t}",
+        "Content-Type": "application/json",
+        "Square-Version": "2024-01-17"
+    }
+
+def save_tokens(data):
+    os.makedirs(os.path.dirname(TOKENS_FILE), exist_ok=True)
+    with open(TOKENS_FILE, "w") as f:
+        json.dump(data, f)
+
+def load_tokens():
+    if not os.path.exists(TOKENS_FILE):
+        return None
+    with open(TOKENS_FILE, "r") as f:
+        return json.load(f)
+
+def get_locations(token=None):
+    """Get all business locations."""
+    res = requests.get(f"{SQUARE_BASE_URL}/locations", headers=get_headers(token))
+    if res.status_code == 200:
+        return res.json().get("locations", [])
+    return []
+
+def get_orders_summary(days=30, token=None):
+    """Pull order totals for the last N days."""
+    locations = get_locations(token)
+    if not locations:
+        return {"error": "No locations found"}
+
+    location_id = locations[0]["id"]
+    end = datetime.utcnow()
+    start = end - timedelta(days=days)
+
+    body = {
+        "location_ids": [location_id],
+        "query": {
+            "filter": {
+                "date_time_filter": {
+                    "created_at": {
+                        "start_at": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "end_at": end.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    }
+                },
+                "state_filter": {"states": ["COMPLETED"]}
+            }
+        }
+    }
+
+    res = requests.post(
+        f"{SQUARE_BASE_URL}/orders/search",
+        headers=get_headers(token),
+        json=body
+    )
+
+    if res.status_code != 200:
+        return {"error": res.text}
+
+    orders = res.json().get("orders", [])
+
+    total_revenue = sum(
+        o.get("total_money", {}).get("amount", 0) for o in orders
+    ) / 100  # Square uses cents
+
+    total_orders = len(orders)
+    avg_ticket = round(total_revenue / total_orders, 2) if total_orders else 0
+
+    # Group by day
+    daily = {}
+    for o in orders:
+        day = o.get("created_at", "")[:10]
+        amount = o.get("total_money", {}).get("amount", 0) / 100
+        daily[day] = daily.get(day, 0) + amount
+
+    return {
+        "location": locations[0].get("name", "Unknown"),
+        "period_days": days,
+        "total_revenue": total_revenue,
+        "total_orders": total_orders,
+        "avg_ticket": avg_ticket,
+        "daily_revenue": dict(sorted(daily.items()))
+    }
+
+def get_labor_summary(days=30, token=None):
+    """Pull labor hours and costs for the last N days."""
+    locations = get_locations(token)
+    if not locations:
+        return {"error": "No locations found"}
+
+    location_id = locations[0]["id"]
+    end = datetime.utcnow()
+    start = end - timedelta(days=days)
+
+    params = {
+        "location_id": location_id,
+        "start_at": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "end_at": end.strftime("%Y-%m-%dT%H:%M:%SZ")
+    }
+
+    res = requests.get(
+        f"{SQUARE_BASE_URL}/labor/shifts",
+        headers=get_headers(token),
+        params=params
+    )
+
+    if res.status_code != 200:
+        return {"error": res.text}
+
+    shifts = res.json().get("shifts", [])
+
+    total_hours = 0
+    total_cost = 0
+
+    for shift in shifts:
+        start_time = datetime.fromisoformat(shift["start_at"].replace("Z", "+00:00"))
+        end_time = datetime.fromisoformat(shift["end_at"].replace("Z", "+00:00")) if shift.get("end_at") else datetime.utcnow().replace(tzinfo=start_time.tzinfo)
+        hours = (end_time - start_time).total_seconds() / 3600
+        total_hours += hours
+
+        wage = shift.get("wage", {}).get("hourly_rate", {}).get("amount", 0) / 100
+        total_cost += hours * wage
+
+    return {
+        "period_days": days,
+        "total_shifts": len(shifts),
+        "total_hours": round(total_hours, 1),
+        "total_labor_cost": round(total_cost, 2)
+    }
+
+def test_connection():
+    """Test if sandbox credentials work."""
+    locations = get_locations()
+    return {"connected": len(locations) > 0, "locations": len(locations)}
