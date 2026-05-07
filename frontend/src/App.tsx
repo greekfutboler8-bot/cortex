@@ -147,7 +147,7 @@ function Dashboard() {
         />
         <MetricCard
           label="Net Margin" loading={loading}
-          value={`${metrics.net_margin_pct}%`}
+          value={metrics.net_margin_pct != null && !isNaN(metrics.net_margin_pct) ? `${metrics.net_margin_pct}%` : "—"}
           sub={`Target: ${data?.business?.labour_cost_target || 22}%`}
           trend={metrics.net_margin_pct >= 18}
           trendLabel={metrics.net_margin_pct >= 18 ? "On target" : "Below target"}
@@ -155,7 +155,7 @@ function Dashboard() {
         />
         <MetricCard
           label="Labour Cost %" loading={loading}
-          value={`${metrics.labour_pct}%`}
+          value={metrics.labour_pct != null && !isNaN(metrics.labour_pct) ? `${metrics.labour_pct}%` : "—"}
           sub={fmt(metrics.labour_cost) + " total"}
           trend={metrics.labour_pct <= (data?.business?.labour_cost_target || 30)}
           trendLabel={metrics.labour_pct > (data?.business?.labour_cost_target || 30) ? `Above ${data?.business?.labour_cost_target}% target` : "On target"}
@@ -163,7 +163,7 @@ function Dashboard() {
         />
         <MetricCard
           label="Food Cost %" loading={loading}
-          value={`${metrics.cogs_pct}%`}
+          value={metrics.cogs_pct != null && !isNaN(metrics.cogs_pct) ? `${metrics.cogs_pct}%` : "—"}
           sub={fmt(metrics.cogs) + " total"}
           trend={metrics.cogs_pct <= (data?.business?.food_cost_target || 28)}
           trendLabel={metrics.cogs_pct > (data?.business?.food_cost_target || 28) ? `Above ${data?.business?.food_cost_target}% target` : "On target"}
@@ -317,7 +317,8 @@ function Analytics() {
   // Cash flow warning: months below $5k net
   const lowCashMonths = chart.filter((m: any) => m.net < 5000);
 
-  // Day of week from weekly-trends vault file (static from vault template data)
+  // Day of week — only show if we have real revenue data
+  const hasData = chart.length > 0 && chart.some((m: any) => m.revenue > 0);
   const dayData = [
     { day: "Saturday", revenue: 28900, rank: 1 },
     { day: "Friday", revenue: 26400, rank: 2 },
@@ -361,7 +362,7 @@ function Analytics() {
       </div>
 
       {/* Profit trend line + seasonal comparison */}
-      {!loading && chart.length >= 2 && (
+      {!loading && hasData && chart.length >= 2 && (
         <div className="grid lg:grid-cols-2 gap-4">
 
           {/* Profit margin trend */}
@@ -426,7 +427,7 @@ function Analytics() {
       )}
 
       {/* Best/worst day of week + break-even */}
-      {!loading && (
+      {!loading && hasData && (
         <div className="grid lg:grid-cols-2 gap-4">
 
           {/* Best and worst performing days */}
