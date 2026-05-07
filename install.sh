@@ -15,6 +15,14 @@ VAULT_DIR="$HOME/CortexVault"
 LOG_DIR="$HOME/cortex/logs"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
 TAILSCALE_KEY="${TAILSCALE_KEY:-}"
+
+# Prompt for Tailscale key if not already provided
+if [ -z "$TAILSCALE_KEY" ]; then
+    echo "  Enter your Tailscale auth key for remote support."
+    echo "  Get one at: https://login.tailscale.com/admin/settings/keys"
+    echo "  (Press Enter to skip — you can connect manually later)"
+    read -r -p "  Tailscale key: " TAILSCALE_KEY
+fi
 VENV_PYTHON="$HOME/cortex/venv/bin/python"
 
 echo ""
