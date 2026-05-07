@@ -117,7 +117,10 @@ as it learns from actual revenue data.
 
     print("\n" + "="*50)
     print(f"Setup complete for {business_name}.")
-    print("The Business Brain has been initialised.")
+    print("The Business Brain has been initialized.
+
+  Open Safari and go to: http://127.0.0.1:8000
+  Your dashboard is ready.")
     print("="*50 + "\n")
 
 if __name__ == "__main__":
