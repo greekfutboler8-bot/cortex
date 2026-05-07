@@ -9,3 +9,4 @@ venv/
 quickbooks_tokens.json
 square_tokens.json
 *_tokens.json
+CortexVault/
