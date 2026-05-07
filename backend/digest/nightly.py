@@ -117,25 +117,4 @@ def run_nightly_digest(financial_data=None):
     print("Nightly digest complete.\n")
 
 if __name__ == "__main__":
-    # Test data — replace with real connector data later
-    test_data = [
-        {"month": "Jun 2024", "revenue": 68000, "cogs": 18000,
-         "labour": 19000, "rent": 8000, "other": 3000, "net": 20000},
-        {"month": "Jul 2024", "revenue": 72000, "cogs": 19500,
-         "labour": 20000, "rent": 8000, "other": 3200, "net": 21300},
-        {"month": "Aug 2024", "revenue": 86000, "cogs": 28000,
-         "labour": 22000, "rent": 8000, "other": 3500, "net": 24500},
-        {"month": "Sep 2024", "revenue": 71000, "cogs": 19000,
-         "labour": 22500, "rent": 8000, "other": 3100, "net": 18400},
-        {"month": "Oct 2024", "revenue": 69000, "cogs": 18500,
-         "labour": 23000, "rent": 8000, "other": 3000, "net": 16500},
-        {"month": "Nov 2024", "revenue": 65000, "cogs": 17500,
-         "labour": 23500, "rent": 8000, "other": 2900, "net": 13100},
-        {"month": "Dec 2024", "revenue": 78000, "cogs": 21000,
-         "labour": 24000, "rent": 8000, "other": 3200, "net": 21800},
-        {"month": "Jan 2025", "revenue": 48000, "cogs": 13000,
-         "labour": 22000, "rent": 8000, "other": 2800, "net": 2200},
-        {"month": "Feb 2025", "revenue": 44000, "cogs": 12000,
-         "labour": 21000, "rent": 8000, "other": 2600, "net": 400},
-    ]
-    run_nightly_digest(test_data)
+    run_nightly_digest()
