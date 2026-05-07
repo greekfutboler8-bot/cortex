@@ -332,3 +332,22 @@ if os.path.exists(FRONTEND_DIST):
     @app.get("/{full_path:path}")
     def serve_frontend(full_path: str):
         return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+@app.get("/api/square/connect")
+def square_connect():
+    from backend.connectors.square import get_square_auth_url
+    return {"auth_url": get_square_auth_url()}
+
+@app.get("/api/square/callback")
+def square_callback(code: str, state: str = ""):
+    from backend.connectors.square import exchange_square_code
+    tokens = exchange_square_code(code)
+    return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+
+@app.get("/api/square/status")
+def square_status():
+    from backend.connectors.square import load_tokens
+    tokens = load_tokens()
+    if tokens and tokens.get("access_token"):
+        return {"connected": True}
+    return {"connected": False}

@@ -145,3 +145,62 @@ def test_connection():
     """Test if sandbox credentials work."""
     locations = get_locations()
     return {"connected": len(locations) > 0, "locations": len(locations)}
+
+
+# ── OAuth Flow ────────────────────────────────────────────────────────────────
+
+SQUARE_OAUTH_BASE = "https://connect.squareupsandbox.com"
+SQUARE_AUTH_URL = "https://connect.squareupsandbox.com/oauth2/authorize"
+SQUARE_TOKEN_URL = "https://connect.squareupsandbox.com/oauth2/token"
+SQUARE_REDIRECT_URI = "http://localhost:8000/api/square/callback"
+
+SQUARE_SANDBOX_APP_SECRET = "sandbox-sq0csb-TdcKvm4FVQGT6U-E7DmgvZqCaccuXnYpQTkUFF69Xh0"  # update with real secret
+
+def get_square_auth_url():
+    """Returns the URL the owner visits to authorise Square."""
+    params = {
+        "client_id": SQUARE_SANDBOX_APP_ID,
+        "scope": "ORDERS_READ+LABOR_READ+PAYMENTS_READ+MERCHANT_PROFILE_READ",
+        "session": "false",
+        "state": "cortex_square_auth",
+    }
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    return f"{SQUARE_AUTH_URL}?{query}"
+
+def exchange_square_code(code: str):
+    """Exchanges the auth code for Square access token."""
+    res = requests.post(
+        SQUARE_TOKEN_URL,
+        json={
+            "client_id": SQUARE_SANDBOX_APP_ID,
+            "client_secret": SQUARE_SANDBOX_APP_SECRET,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": SQUARE_REDIRECT_URI,
+        },
+        headers={"Content-Type": "application/json", "Square-Version": "2024-01-17"}
+    )
+    tokens = res.json()
+    tokens["obtained_at"] = datetime.utcnow().isoformat()
+    save_tokens(tokens)
+    return tokens
+
+def refresh_square_token():
+    """Refreshes the Square access token."""
+    tokens = load_tokens()
+    if not tokens or not tokens.get("refresh_token"):
+        raise Exception("No Square tokens found.")
+    res = requests.post(
+        SQUARE_TOKEN_URL,
+        json={
+            "client_id": SQUARE_SANDBOX_APP_ID,
+            "client_secret": SQUARE_SANDBOX_APP_SECRET,
+            "refresh_token": tokens["refresh_token"],
+            "grant_type": "refresh_token",
+        },
+        headers={"Content-Type": "application/json", "Square-Version": "2024-01-17"}
+    )
+    new_tokens = res.json()
+    new_tokens["obtained_at"] = datetime.utcnow().isoformat()
+    save_tokens(new_tokens)
+    return new_tokens
