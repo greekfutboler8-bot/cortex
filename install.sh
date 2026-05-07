@@ -3,8 +3,8 @@
 # ─────────────────────────────────────────────
 # CORTEX INSTALLER
 # Runs on a fresh Mac to set up everything
-# Usage: bash install.sh
-#    or: TAILSCALE_KEY="tskey-auth-xxx" bash install.sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/greekfutboler8-bot/cortex/main/install.sh | bash
+#    or: TAILSCALE_KEY="tskey-auth-xxx" bash <(curl -fsSL https://raw.githubusercontent.com/greekfutboler8-bot/cortex/main/install.sh)
 # ─────────────────────────────────────────────
 
 set -e
