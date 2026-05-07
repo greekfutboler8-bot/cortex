@@ -9,13 +9,12 @@
 
 set -e
 
-GITHUB_TOKEN="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"
-GITHUB_REPO="https://greekfutboler8-bot:${GITHUB_TOKEN}@github.com/greekfutboler8-bot/cortex.git"
+GITHUB_REPO="https://github.com/greekfutboler8-bot/cortex.git"
 CORTEX_DIR="$HOME/cortex"
 VAULT_DIR="$HOME/CortexVault"
 LOG_DIR="$HOME/cortex/logs"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
-TAILSCALE_KEY="${TAILSCALE_KEY:-tskey-auth-kpU7MUYa4c11CNTRL-wvn8Qvb19oFY5Wu9k6xUnFkqFJrbfUp2}"
+TAILSCALE_KEY="${TAILSCALE_KEY:-}"
 VENV_PYTHON="$HOME/cortex/venv/bin/python"
 
 echo ""
