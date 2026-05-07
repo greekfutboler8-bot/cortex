@@ -142,7 +142,7 @@ function Dashboard() {
           label="Monthly Revenue" loading={loading}
           value={fmt(metrics.revenue)} sub={metrics.latest_month}
           trend={metrics.revenue_change_pct >= 0}
-          trendLabel={`${metrics.revenue_change_pct > 0 ? "+" : ""}${metrics.revenue_change_pct}% vs prior month`}
+          trendLabel={metrics.revenue_change_pct != null && !isNaN(metrics.revenue_change_pct) ? `${metrics.revenue_change_pct > 0 ? "+" : ""}${metrics.revenue_change_pct}% vs prior month` : "No prior data"}
           icon={DollarSign} accent="bg-blue-50"
         />
         <MetricCard
@@ -335,7 +335,7 @@ function Analytics() {
 
       {/* Top metric cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard label="Latest Revenue" loading={loading} value={fmt(metrics.revenue)} sub={metrics.latest_month} trend={metrics.revenue_change_pct >= 0} trendLabel={`${metrics.revenue_change_pct > 0 ? "+" : ""}${metrics.revenue_change_pct}% vs prior`} icon={DollarSign} accent="bg-blue-50" />
+        <MetricCard label="Latest Revenue" loading={loading} value={fmt(metrics.revenue)} sub={metrics.latest_month} trend={metrics.revenue_change_pct >= 0} trendLabel={metrics.revenue_change_pct != null && !isNaN(metrics.revenue_change_pct) ? `${metrics.revenue_change_pct > 0 ? "+" : ""}${metrics.revenue_change_pct}% vs prior` : "No prior data"} icon={DollarSign} accent="bg-blue-50" />
         <MetricCard label="Net Profit" loading={loading} value={fmt(metrics.net_profit)} sub={metrics.latest_month} trend={metrics.net_profit > 5000} trendLabel={metrics.net_profit > 5000 ? "Healthy" : "Watch closely"} icon={TrendingUp} accent="bg-emerald-50" />
         <MetricCard label="Food Cost %" loading={loading} value={`${metrics.cogs_pct}%`} sub={`Target: ${profile.food_cost_target}%`} trend={metrics.cogs_pct <= profile.food_cost_target} trendLabel={metrics.cogs_pct > profile.food_cost_target ? "Above target" : "On target"} icon={Package} accent="bg-red-50" />
         <MetricCard label="Labour Cost %" loading={loading} value={`${metrics.labour_pct}%`} sub={`Target: ${profile.labour_cost_target}%`} trend={metrics.labour_pct <= profile.labour_cost_target} trendLabel={metrics.labour_pct > profile.labour_cost_target ? "Above target" : "On target"} icon={Users} accent="bg-amber-50" />
@@ -709,7 +709,7 @@ function Reports() {
               </div>
               <div className="bg-slate-50 rounded-xl p-4 text-center">
                 <div className="text-xs text-slate-400 mb-1">Net Margin</div>
-                <div className={`text-xl font-bold ${metrics.net_margin_pct < 10 ? "text-red-600" : "text-slate-900"}`}>{metrics.net_margin_pct}%</div>
+                <div className={`text-xl font-bold ${metrics.net_margin_pct < 10 ? "text-red-600" : "text-slate-900"}`}>{metrics.net_margin_pct != null && !isNaN(metrics.net_margin_pct) ? `${metrics.net_margin_pct}%` : "—"}</div>
               </div>
             </div>
 

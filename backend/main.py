@@ -212,6 +212,13 @@ Rules:
 - Do not use bullet points. Do not start with "Good morning". Write plain prose.
 - Use the actual numbers from the data above.
 """
+    # Don't generate a briefing if there's no financial data yet
+    if latest.get("revenue", 0) == 0:
+        text = f"Welcome to Cortex, {profile.get('name')}. No financial data has been connected yet. Go to Settings → Data Connections to connect QuickBooks, Square, or drop a CSV file in ~/CortexWatch to get started."
+        _briefing_cache["text"] = text
+        _briefing_cache["date"] = today
+        return text
+
     try:
         response = ollama.chat(
             model="llama3.2",
