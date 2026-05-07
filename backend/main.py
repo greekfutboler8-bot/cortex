@@ -351,3 +351,11 @@ def square_status():
     if tokens and tokens.get("access_token"):
         return {"connected": True}
     return {"connected": False}
+
+@app.post("/api/quickbooks/disconnect")
+def quickbooks_disconnect():
+    import os
+    token_file = os.path.expanduser("~/cortex/quickbooks_tokens.json")
+    if os.path.exists(token_file):
+        os.remove(token_file)
+    return {"status": "disconnected"}

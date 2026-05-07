@@ -833,12 +833,13 @@ function SettingsTab() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className={`flex items-center gap-1.5 text-xs font-semibold ${qbStatus?.connected ? "text-emerald-600" : "text-slate-400"}`}>
-                  <div className={`w-2 h-2 rounded-full ${qbStatus?.connected ? "bg-emerald-400" : "bg-slate-300"}`} />
-                  {qbStatus?.connected ? "Connected" : "Not connected"}
-                </div>
-                {!qbStatus?.connected && (
-                  <a href="/api/quickbooks/connect" className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-700 transition-colors">Connect</a>
+                {!qbStatus?.connected ? (
+                  <a href="#" onClick={async (e) => { e.preventDefault(); const res = await fetch('/api/quickbooks/connect'); const data = await res.json(); window.location.href = data.auth_url; }} className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-700 transition-colors">Connect</a>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600"><div className="w-2 h-2 rounded-full bg-emerald-400" />Connected</div>
+                    <button onClick={async () => { await fetch('/api/quickbooks/disconnect', {method:'POST'}); window.location.reload(); }} className="text-xs text-red-400 hover:text-red-600">Disconnect</button>
+                  </div>
                 )}
               </div>
             </div>
@@ -858,7 +859,7 @@ function SettingsTab() {
                   <div className="w-2 h-2 rounded-full bg-slate-300" />
                   Not connected
                 </div>
-                <button className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-700 transition-colors">Connect</button>
+                <button onClick={async () => { const res = await fetch('/api/square/connect'); const data = await res.json(); window.location.href = data.auth_url; }} className="text-xs bg-slate-900 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-slate-700 transition-colors">Connect</button>
               </div>
             </div>
             {/* CSV */}
