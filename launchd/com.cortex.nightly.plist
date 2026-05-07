@@ -6,11 +6,18 @@
     <string>com.cortex.nightly</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/gm/cortex/venv/bin/python</string>
-        <string>/Users/gm/cortex/backend/digest/nightly.py</string>
+        <string>CORTEX_HOME/cortex/venv/bin/python</string>
+        <string>CORTEX_HOME/cortex/backend/digest/nightly.py</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/gm/cortex</string>
+    <string>CORTEX_HOME/cortex</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>CORTEX_HOME</string>
+    </dict>
     <key>StartCalendarInterval</key>
     <dict>
         <key>Hour</key>
@@ -19,8 +26,8 @@
         <integer>0</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/Users/gm/cortex/logs/nightly.log</string>
+    <string>CORTEX_HOME/cortex/logs/nightly.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/gm/cortex/logs/nightly-error.log</string>
+    <string>CORTEX_HOME/cortex/logs/nightly-error.log</string>
 </dict>
 </plist>

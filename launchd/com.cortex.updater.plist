@@ -8,7 +8,7 @@
     <array>
         <string>/usr/bin/git</string>
         <string>-C</string>
-        <string>/Users/gm/cortex</string>
+        <string>CORTEX_HOME/cortex</string>
         <string>pull</string>
         <string>origin</string>
         <string>main</string>
@@ -21,8 +21,8 @@
         <integer>30</integer>
     </dict>
     <key>StandardOutPath</key>
-    <string>/Users/gm/cortex/logs/updater.log</string>
+    <string>CORTEX_HOME/cortex/logs/updater.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/gm/cortex/logs/updater-error.log</string>
+    <string>CORTEX_HOME/cortex/logs/updater-error.log</string>
 </dict>
 </plist>

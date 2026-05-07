@@ -6,3 +6,6 @@ frontend/dist/
 *.log
 .DS_Store
 venv/
+quickbooks_tokens.json
+square_tokens.json
+*_tokens.json
