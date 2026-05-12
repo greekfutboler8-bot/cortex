@@ -26,7 +26,7 @@ def get_auth_url():
     params = {
         "client_id":     QUICKBOOKS_CLIENT_ID,
         "response_type": "code",
-        "scope":         "com.intuit.quickbooks.accounting",
+        "scope":         "com.intuit.quickbooks.accounting.reports.read",
         "redirect_uri":  QUICKBOOKS_REDIRECT_URI,
         "state":         "cortex_auth",
     }

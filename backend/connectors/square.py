@@ -3,8 +3,7 @@ import json
 import requests
 from datetime import datetime, timedelta
 
-SQUARE_SANDBOX_APP_ID = "sandbox-sq0idb-XdHFr3Iex9pyoAQM6PXE9g"
-SQUARE_SANDBOX_TOKEN = "EAAAlxvl1uUCf91XQQMnFz9MgZqjkc5qVjHogdfwPYpkbnNBAgjMCoaKydCFc9su"
+from config import SQUARE_SANDBOX_APP_ID, SQUARE_SANDBOX_TOKEN, SQUARE_SANDBOX_APP_SECRET
 SQUARE_BASE_URL = "https://connect.squareupsandbox.com/v2"
 
 VAULT_PATH = os.path.expanduser("~/CortexVault")
@@ -153,8 +152,6 @@ SQUARE_OAUTH_BASE = "https://connect.squareupsandbox.com"
 SQUARE_AUTH_URL = "https://connect.squareupsandbox.com/oauth2/authorize"
 SQUARE_TOKEN_URL = "https://connect.squareupsandbox.com/oauth2/token"
 SQUARE_REDIRECT_URI = "http://localhost:8000/api/square/callback"
-
-SQUARE_SANDBOX_APP_SECRET = "sandbox-sq0csb-TdcKvm4FVQGT6U-E7DmgvZqCaccuXnYpQTkUFF69Xh0"  # update with real secret
 
 def get_square_auth_url():
     """Returns the URL the owner visits to authorise Square."""
