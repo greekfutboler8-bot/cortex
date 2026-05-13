@@ -114,6 +114,10 @@ def run_nightly_digest(financial_data=None):
         print("Checking for anomalies...")
         check_for_anomalies(financial_data)
 
+    # Pull USDA market prices
+    from backend.connectors.usda import run_usda_pull
+    run_usda_pull()
+
     print("Nightly digest complete.\n")
 
 if __name__ == "__main__":
