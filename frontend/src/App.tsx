@@ -1028,7 +1028,65 @@ const tabs: { id: Tab; label: string; icon: any; badge?: number }[] = [
   { id: "reports", label: "Reports", icon: FileText },
   { id: "alerts", label: "Alerts", icon: AlertTriangle },
   { id: "settings", label: "Settings", icon: Settings },
+  { id: "market", label: "Market Prices", icon: TrendingUp },
 ];
+
+
+function MarketPricesTab() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/market-prices")
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="p-8 text-slate-400">Loading market prices...</div>;
+  if (!data || !data.commodities || Object.keys(data.commodities).length === 0) {
+    return <div className="p-8 text-slate-400">No market price data available yet. Data updates nightly.</div>;
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-slate-900">Wholesale Market Prices</h2>
+        <p className="text-sm text-slate-500 mt-1">Source: USDA Agricultural Marketing Service · Updated: {data.last_updated}</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {Object.entries(data.commodities).map(([name, commodity]: [string, any]) => (
+          <div key={name} className="bg-white border border-slate-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-slate-900 capitalize">{name}</h3>
+              <span className="text-xs text-slate-400">{commodity.report_date}</span>
+            </div>
+            <div className="space-y-2">
+              {commodity.prices.filter((p: any) => p.item && p.wtd_avg_price != null).map((price: any, i: number) => {
+                const change = price.price_change || 0;
+                const isUp = change > 0;
+                const isDown = change < 0;
+                return (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                    <span className="text-slate-600">{price.item}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-900">{price.wtd_avg_price} {price.price_unit}</span>
+                      {change !== 0 && (
+                        <span className={`text-xs font-medium ${isUp ? "text-red-600" : "text-green-600"}`}>
+                          {isUp ? "▲" : "▼"} {Math.abs(change).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
