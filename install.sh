@@ -265,6 +265,7 @@ QUICKBOOKS_REDIRECT_URI = "http://localhost:8000/api/quickbooks/callback"
 
 VAULT_PATH = "$VAULT_DIR"
 OLLAMA_MODEL = "llama3.2"
+USDA_API_KEY = "oK/SXE39wQjXsV1LA2Oar7mbwEjw6jkH"
 CONFIGEOF
 
 # ── Done ─────────────────────────────────────
