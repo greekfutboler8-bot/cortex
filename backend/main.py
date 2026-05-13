@@ -320,6 +320,15 @@ def quickbooks_callback(code: str, realmId: str):
     exchange_code_for_tokens(code, realmId)
     return {"status": "connected", "realm_id": realmId}
 
+@app.get("/api/market-prices")
+def get_market_prices():
+    import json
+    filepath = os.path.join(VAULT_PATH, "market/commodity-prices.json")
+    if not os.path.exists(filepath):
+        return {"last_updated": None, "commodities": {}}
+    with open(filepath) as f:
+        return json.load(f)
+
 @app.get("/api/quickbooks/status")
 def quickbooks_status():
     from backend.connectors.quickbooks import load_tokens
